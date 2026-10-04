@@ -1,11 +1,10 @@
 const router = require('express').Router();
-const fs = require('fs');
-const path = require('path');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Order = require('../models/Order');
 const asyncHandler = require('../utils/asyncHandler');
 const upload = require('../middleware/upload');
+const { saveFiles, removeImage } = require('../utils/images');
 const { protect, adminOnly } = require('../middleware/auth');
 const { escapeRegex, toArray, fail, recalcRating } = require('../utils/helpers');
 
@@ -99,15 +98,10 @@ const fromBody = (b) => {
   if (b.sizes !== undefined) d.sizes = toArray(b.sizes);
   return d;
 };
-const filesToPaths = (files = []) => files.map((f) => `/uploads/products/${f.filename}`);
-const removeFile = (p) => {
-  if (!p || !p.startsWith('/uploads/')) return;
-  fs.unlink(path.join(__dirname, '..', p), () => {});
-};
 
 router.post('/', protect, adminOnly, upload.array('images', 5), asyncHandler(async (req, res) => {
   const data = fromBody(req.body);
-  let gallery = filesToPaths(req.files);
+  let gallery = await saveFiles(req.files);
   if (!gallery.length && req.body.imageUrl) gallery = [req.body.imageUrl];
   if (!gallery.length) fail(res, 400, 'At least one product image is required');
   if (data.discount === undefined && data.oldPrice > data.price) data.discount = Math.round(((data.oldPrice - data.price) / data.oldPrice) * 100);
@@ -119,10 +113,10 @@ router.put('/:id', protect, adminOnly, upload.array('images', 5), asyncHandler(a
   const product = await Product.findById(req.params.id);
   if (!product) fail(res, 404, 'Product not found');
   Object.assign(product, fromBody(req.body));
-  const added = filesToPaths(req.files);
+  const added = await saveFiles(req.files);
   if (added.length) {
     if (req.body.appendImages === 'true') product.gallery = [...product.gallery, ...added];
-    else { product.gallery.forEach(removeFile); product.gallery = added; }
+    else { await Promise.all(product.gallery.map(removeImage)); product.gallery = added; }
     product.image = product.gallery[0];
   }
   await product.save();
@@ -132,7 +126,7 @@ router.put('/:id', protect, adminOnly, upload.array('images', 5), asyncHandler(a
 router.delete('/:id', protect, adminOnly, asyncHandler(async (req, res) => {
   const product = await Product.findById(req.params.id);
   if (!product) fail(res, 404, 'Product not found');
-  product.gallery.forEach(removeFile);
+  await Promise.all(product.gallery.map(removeImage));
   await Review.deleteMany({ product: product._id });
   await product.deleteOne();
   res.json({ message: 'Product deleted' });

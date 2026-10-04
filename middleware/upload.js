@@ -1,21 +1,10 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
-const dir = path.join(__dirname, '..', 'uploads', 'products');
-fs.mkdirSync(dir, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, dir),
-  filename: (req, file, cb) => {
-    const base = path.parse(file.originalname).name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
-    cb(null, `${Date.now()}-${base}${path.extname(file.originalname).toLowerCase()}`);
-  },
-});
-
+// Files are kept in memory and then saved to MongoDB (see utils/images.js).
+// Keep each file small: Vercel allows about 4.5 MB per request (the admin form resizes photos automatically).
 module.exports = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024, files: 5 },
   fileFilter: (req, file, cb) => {
     if (/^image\/(jpe?g|png|webp|avif|gif)$/.test(file.mimetype)) return cb(null, true);
     const e = new Error('Only image files are allowed'); e.status = 400; cb(e);

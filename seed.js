@@ -1,4 +1,4 @@
-// Usage: npm run seed   (WARNING: wipes products, reviews, coupons, carts, orders, users and testimonials)
+// Usage: npm run seed   (WARNING: wipes products, reviews, coupons, carts, orders, users, images and testimonials)
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
@@ -10,18 +10,30 @@ const Coupon = require('./models/Coupon');
 const Cart = require('./models/Cart');
 const Order = require('./models/Order');
 const Testimonial = require('./models/Testimonial');
+const Image = require('./models/Image');
 const { ALL_SIZES } = require('./config/constants');
 const { recalcRating } = require('./utils/helpers');
 
 const DIR = path.join(__dirname, 'uploads', 'products');
 // If you copy your real photos into uploads/products named like the keys below, they are used automatically.
-const localImage = (key) => {
-  if (!key || !fs.existsSync(DIR)) return null;
-  const f = fs.readdirSync(DIR).find((n) => path.parse(n).name === key);
-  return f ? `/uploads/products/${f}` : null;
+const TYPES = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.avif': 'image/avif', '.gif': 'image/gif' };
+const cache = {};
+// reads a photo from uploads/products and stores it in MongoDB; returns its "/api/images/<id>" path
+const localImage = async (key) => {
+  if (!key) return null;
+  if (key in cache) return cache[key];
+  cache[key] = null;
+  if (fs.existsSync(DIR)) {
+    const f = fs.readdirSync(DIR).find((n) => path.parse(n).name === key && TYPES[path.extname(n).toLowerCase()]);
+    if (f) {
+      const img = await Image.create({ name: f, contentType: TYPES[path.extname(f).toLowerCase()], data: fs.readFileSync(path.join(DIR, f)) });
+      cache[key] = `/api/images/${img._id}`;
+    }
+  }
+  return cache[key];
 };
 const bgs = ['e5e5e5', 'f2f0f1', 'ececec', 'e9e5df', 'f0efee', 'e6e0da', 'ede9e6'];
-const ph = (i, text) => `https://placehold.co/500x500/${bgs[i % bgs.length]}/1a1a1a?font=poppins&text=${encodeURIComponent(text)}`;
+const ph = (i, text) => `/api/placeholder?bg=${bgs[i % bgs.length]}&text=${encodeURIComponent(text)}`; // served by our own backend
 
 const S4 = ['Small', 'Medium', 'Large', 'X-Large'];
 const S3 = ['Small', 'Medium', 'Large'];
@@ -89,7 +101,7 @@ const TESTIMONIALS = [
 
 (async () => {
   await connectDB();
-  await Promise.all([User, Product, Review, Coupon, Cart, Order, Testimonial].map((M) => M.deleteMany({})));
+  await Promise.all([User, Product, Review, Coupon, Cart, Order, Testimonial, Image].map((M) => M.deleteMany({})));
 
   await User.create([
     { name: 'Admin', email: process.env.ADMIN_EMAIL || 'admin@shopco.com', password: process.env.ADMIN_PASSWORD || 'Admin@123', role: 'admin' },
@@ -97,13 +109,15 @@ const TESTIMONIALS = [
   ]);
 
   let usedLocal = 0;
-  const docs = RAW.map(([name, category, style, price, oldPrice, discount, colors, sizes, section, description, key, key2], i) => {
-    const main = localImage(key);
-    const second = localImage(key2);
+  const docs = [];
+  for (let i = 0; i < RAW.length; i += 1) {
+    const [name, category, style, price, oldPrice, discount, colors, sizes, section, description, key, key2] = RAW[i];
+    const main = await localImage(key);
+    const second = await localImage(key2);
     if (main) usedLocal += 1;
     const gallery = main ? [main, ...(second ? [second] : [])] : [ph(i, name), ph(i + 1, name), ph(i + 2, name), ph(i + 3, name)];
-    return { name, category, style, price, oldPrice, discount, colors, sizes, section, description, image: gallery[0], gallery, stock: 50 + ((i * 7) % 50) };
-  });
+    docs.push({ name, category, style, price, oldPrice, discount, colors, sizes, section, description, image: gallery[0], gallery, stock: 50 + ((i * 7) % 50) });
+  }
   const products = await Product.insertMany(docs);
 
   const reviewDocs = [];
