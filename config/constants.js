@@ -1,4 +1,4 @@
-exports.CATEGORIES = ['T-shirts', 'Shorts', 'Shirts', 'Hoodie', 'Jeans'];
+exports.CATEGORIES = ['T-shirts', 'Shorts', 'Shirts', 'Hoodie', 'Jeans', 'Dresses'];
 exports.DRESS_STYLES = ['Casual', 'Formal', 'Party', 'Gym'];
 exports.ALL_SIZES = ['XX-Small', 'X-Small', 'Small', 'Medium', 'Large', 'X-Large', 'XX-Large'];
 exports.COLORS = [
