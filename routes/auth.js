@@ -4,8 +4,9 @@ const User = require('../models/User');
 const asyncHandler = require('../utils/asyncHandler');
 const { protect } = require('../middleware/auth');
 const { fail } = require('../utils/helpers');
+const getSecret = require('../utils/jwtSecret');
 
-const sign = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES || '7d' });
+const sign = (id) => jwt.sign({ id }, getSecret(), { expiresIn: process.env.JWT_EXPIRES || '7d' });
 
 router.post('/register', asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
