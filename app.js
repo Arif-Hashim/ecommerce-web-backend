@@ -6,9 +6,8 @@ const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/error');
 
 const app = express();
-const origins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',').map((s) => s.trim().replace(/\/$/, ''));
-// CLIENT_URL=* allows every website (handy for testing). Use your exact frontend link(s) once everything works.
-app.use(cors({ origin: origins.includes('*') ? true : origins }));
+// Allow every website to call this API. Login uses a token (not cookies), so this is safe for this project.
+app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
 
